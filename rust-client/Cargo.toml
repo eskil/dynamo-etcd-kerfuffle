@@ -1,10 +1,77 @@
-[package]
+[workspace]
+members = [
+    "lib/runtime",
+]
+
+default-members = [
+    "lib/runtime",
+]
+
+resolver = "3"
+
+[workspace.package]
 name = "rust-client"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+authors = ["various artists"]
+license = "Apache-2.0"
+homepage = "https://github.com/ai-dynamo/dynamo"
+repository = "https://github.com/ai-dynamo/dynamo.git"
+keywords = ["llm", "genai", "inference", "nvidia", "distributed"]
 
-[dependencies]
+[workspace.dependencies]
+# Local crates
+dynamo-runtime = { path = "lib/runtime", version = "0.6.0" }
+
+# External jank
+anyhow = { version = "1" }
+async-nats = { version = "0.40", features = ["service"] }
+async-stream = { version = "0.3" }
+async-trait = { version = "0.1" }
+async_zmq = { version = "0.4.0" }
+axum = { version = "0.8", features = ["macros"] }
+blake3 = { version = "1" }
+bytes = { version = "1" }
+chrono = { version = "0.4", default-features = false, features = [
+    "alloc",
+    "std",
+    "clock",
+    "now",
+    "serde",
+] }
+derive_builder = { version = "0.20" }
+derive-getters = { version = "0.5" }
+either = { version = "1.13", features = ["serde"] }
+etcd-client = { version = "0.16", features = ["tls"] }
+futures = { version = "0.3" }
+humantime = { version = "2.2.0" }
+parking_lot = "0.12.5"
+prometheus = { version = "0.14" }
+rand = { version = "0.9.0" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1" }
+tempfile = "3"
+thiserror = { version = "2.0.11" }
 tokio = { version = "1", features = ["full"] }
-etcd-client = "0.12.0" # check which version works with Rust 1.81
-indexmap = "2.11.0"    # the last version compatible with 1.81
-
+tokio-stream = { version = "0.1" }
+tokio-util = { version = "0.7", features = ["codec", "net", "rt"] }
+tower-http = { version = "0.6", features = ["trace"] }
+tracing = { version = "0.1" }
+tracing-subscriber = { version = "0.3", features = [
+    "env-filter",
+    "local-time",
+    "json",
+] }
+tracing-opentelemetry = { version = "0.32.0" }
+opentelemetry = { version = "0.31.0", features = ["trace"] }
+opentelemetry_sdk = { version = "0.31.0", features = ["trace", "rt-tokio"] }
+opentelemetry-otlp = { version = "0.31.0", features = ["trace", "grpc-tonic"] }
+reqwest = { version = "0.12.22", default-features = false, features = [
+    "json",
+    "stream",
+    "rustls-tls",
+] }
+validator = { version = "0.20.0", features = ["derive"] }
+uuid = { version = "1.17", features = ["v4", "serde"] }
+url = { version = "2.5", features = ["serde"] }
+xxhash-rust = { version = "0.8", features = ["xxh3", "const_xxh3"] }
