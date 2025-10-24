@@ -1,0 +1,10 @@
+[package]
+name = "rust-client"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+etcd-client = "0.12.0" # check which version works with Rust 1.81
+indexmap = "2.11.0"    # the last version compatible with 1.81
+
