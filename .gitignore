@@ -1,6 +1,9 @@
 #Folders
 .DS_Store
 
+# rust
+rust-client/target/
+
 # Emacs
 \#*\#
 *~
