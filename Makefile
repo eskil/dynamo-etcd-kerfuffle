@@ -3,14 +3,14 @@ ETCD_ENDPOINTS=http://etcd1:2379,http://etcd2:2379,http://etcd3:2379
 
 define get-etcd-leader-cmd
 	docker exec etcd1 etcdctl \
-	  --endpoints=http://etcd1:2379,http://etcd2:2379,http://etcd3:2379 \
+	  --endpoints=$(ETCD_ENDPOINTS) \
 	  endpoint status --write-out=json | \
 	  jq -r '.[] | select(.Status.header.member_id == .Status.leader) | .Endpoint | capture("http://(?<name>[^:]+):").name'
 endef
 
 
 define etcd-status-table-cmd
-	docker exec etcd1 etcdctl --endpoints=http://etcd1:2379,http://etcd2:2379,http://etcd3:2379 endpoint status --write-out=table
+	docker exec etcd1 etcdctl --endpoints=$(ETCD_ENDPOINTS) endpoint status --write-out=table
 endef
 
 compose:
