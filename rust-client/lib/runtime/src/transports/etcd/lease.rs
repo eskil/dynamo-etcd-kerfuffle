@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+use std::time::Duration;
 
 /// Create a [`Lease`] with a given time-to-live (TTL) attached to the [`CancellationToken`].
 pub async fn create_lease(
@@ -28,18 +29,68 @@ pub async fn create_lease(
             eprintln!("[CREATE_LEASE] PANIC in keep-alive task for lease_id={}: {:?}", id, panic_info);
         }));
         
-        match keep_alive(lease_client, id, ttl, child).await {
-            Ok(_) => {
-                eprintln!("[CREATE_LEASE] Keep-alive task exited successfully for lease_id={}", id);
-                tracing::trace!("keep alive task exited successfully");
-            },
-            Err(e) => {
-                eprintln!("[CREATE_LEASE] Keep-alive task failed for lease_id={}: {}", id, e);
-                tracing::error!(
-                    error = %e,
-                    "Unable to maintain lease. Check etcd server status"
-                );
-                token.cancel();
+        // Feature flag to enable/disable retry logic
+        const ENABLE_RETRY: bool = true;
+        
+        if ENABLE_RETRY {
+            // Retry logic for keep-alive failures
+            let mut retry_count = 0;
+            const MAX_RETRIES: u32 = 5;
+            const RETRY_DELAY: Duration = Duration::from_secs(1);
+            
+            eprintln!("[CREATE_LEASE] Using retry logic for lease_id={}", id);
+            
+            loop {
+                match keep_alive(lease_client.clone(), id, ttl, child.clone()).await {
+                    Ok(_) => {
+                        eprintln!("[CREATE_LEASE] Keep-alive task exited successfully for lease_id={}", id);
+                        tracing::trace!("keep alive task exited successfully");
+                        break;
+                    },
+                    Err(e) => {
+                        retry_count += 1;
+                        eprintln!("[CREATE_LEASE] Keep-alive task failed for lease_id={} (attempt {}/{}): {}", 
+                                 id, retry_count, MAX_RETRIES, e);
+                        tracing::error!(
+                            error = %e,
+                            "Unable to maintain lease. Check etcd server status (attempt {}/{})",
+                            retry_count, MAX_RETRIES
+                        );
+            
+                        
+                        if retry_count >= MAX_RETRIES {
+                            eprintln!("[CREATE_LEASE] Max retries exceeded for lease_id={}, giving up", id);
+                            tracing::error!(
+                                error = %e,
+                                "Unable to maintain lease after {} retries. Check etcd server status",
+                                MAX_RETRIES
+                            );
+                            token.cancel();
+                            break;
+                        }
+                        
+                        eprintln!("[CREATE_LEASE] Retrying keep-alive for lease_id={} in {:?}", id, RETRY_DELAY);
+                        tokio::time::sleep(RETRY_DELAY).await;
+                    }
+                }
+            }
+        } else {
+            // Original logic without retry
+            eprintln!("[CREATE_LEASE] Using original logic (no retry) for lease_id={}", id);
+            
+            match keep_alive(lease_client, id, ttl, child).await {
+                Ok(_) => {
+                    eprintln!("[CREATE_LEASE] Keep-alive task exited successfully for lease_id={}", id);
+                    tracing::trace!("keep alive task exited successfully");
+                },
+                Err(e) => {
+                    eprintln!("[CREATE_LEASE] Keep-alive task failed for lease_id={}: {}", id, e);
+                    tracing::error!(
+                        error = %e,
+                        "Unable to maintain lease. Check etcd server status"
+                    );
+                    token.cancel();
+                }
             }
         }
         
