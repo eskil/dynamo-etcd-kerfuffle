@@ -18,6 +18,44 @@ use etcd_client::{
     Watcher,
 };
 pub use etcd_client::{ConnectOptions, KeyValue, LeaseClient};
+
+/// Debug macro that adds file and line number to colored output
+#[macro_export]
+macro_rules! debug_println {
+    ($tag_color:ident, $tag:literal, $fmt_color:ident, $fmt:literal $(, $arg:expr)*) => {{
+        let tag_color = match stringify!($tag_color) {
+            "RED" => "\x1b[31m\x1b[1m",
+            "GREEN" => "\x1b[32m\x1b[1m",
+            "YELLOW" => "\x1b[33m\x1b[1m",
+            "BLUE" => "\x1b[34m\x1b[1m",
+            "MAGENTA" => "\x1b[35m\x1b[1m",
+            "CYAN" => "\x1b[36m\x1b[1m",
+            "WHITE" => "\x1b[37m\x1b[1m",
+            "FAINT" => "\x1b[2m",
+            _ => "\x1b[0m",
+        };
+        let fmt_color = match stringify!($fmt_color) {
+            "RED" => "\x1b[31m\x1b[1m",
+            "GREEN" => "\x1b[32m\x1b[1m",
+            "YELLOW" => "\x1b[33m\x1b[1m",
+            "BLUE" => "\x1b[34m\x1b[1m",
+            "MAGENTA" => "\x1b[35m\x1b[1m",
+            "CYAN" => "\x1b[36m\x1b[1m",
+            "WHITE" => "\x1b[37m\x1b[1m",
+            "FAINT" => "\x1b[2m",
+            "RESET" => "\x1b[0m",
+            _ => "\x1b[0m",
+        };
+        // Only print file:line if tag or fmt is not empty
+        if $tag.is_empty() {
+            eprintln!(concat!("{}", $tag, "{}", " ", $fmt, "\x1b[0m"), 
+                     tag_color, fmt_color $(, $arg)*);
+        } else {
+            eprintln!(concat!("{}", $tag, "{}", " ",$fmt, "\x1b[0m", " \x1b[36m\x1b[1m\x1b[2m{}:{}\x1b[0m"), 
+                     tag_color, fmt_color $(, $arg)*, file!(), line!());
+        }
+    }};
+}
 use tokio::time::{Duration, interval};
 
 mod lease;
