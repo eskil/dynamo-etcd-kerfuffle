@@ -4,29 +4,40 @@
 use super::*;
 use std::time::Duration;
 
+// ANSI color codes
+const RESET: &str = "\x1b[0m";
+const BOLD: &str = "\x1b[1m";
+const RED: &str = "\x1b[31m";
+const GREEN: &str = "\x1b[32m";
+const YELLOW: &str = "\x1b[33m";
+const BLUE: &str = "\x1b[34m";
+const MAGENTA: &str = "\x1b[35m";
+const CYAN: &str = "\x1b[36m";
+const WHITE: &str = "\x1b[37m";
+
 /// Create a [`Lease`] with a given time-to-live (TTL) attached to the [`CancellationToken`].
 pub async fn create_lease(
     mut lease_client: LeaseClient,
     ttl: u64,
     token: CancellationToken,
 ) -> Result<Lease> {
-    eprintln!("[CREATE_LEASE] Creating lease with ttl={}", ttl);
+    eprintln!("{}{}[CREATE_LEASE]{} Creating lease with ttl={}", CYAN, BOLD, RESET, ttl);
     
     let lease = lease_client.grant(ttl as i64, None).await?;
-    eprintln!("[CREATE_LEASE] Lease granted with id={}, ttl={}", lease.id(), lease.ttl());
+    eprintln!("{}{}[CREATE_LEASE]{} Lease granted with id={}, ttl={}", GREEN, BOLD, RESET, lease.id(), lease.ttl());
 
     let id = lease.id() as u64;
     let ttl = lease.ttl() as u64;
     let child = token.child_token();
     let clone = token.clone();
 
-    eprintln!("[CREATE_LEASE] Spawning keep-alive task for lease_id={}", id);
+    eprintln!("{}{}[CREATE_LEASE]{} Spawning keep-alive task for lease_id={}", BLUE, BOLD, RESET, id);
     tokio::spawn(async move {
-        eprintln!("[CREATE_LEASE] Keep-alive task started for lease_id={}", id);
+        eprintln!("{}{}[CREATE_LEASE]{} Keep-alive task started for lease_id={}", GREEN, BOLD, RESET, id);
         
         // Add a panic hook to catch any panics
         std::panic::set_hook(Box::new(move |panic_info| {
-            eprintln!("[CREATE_LEASE] PANIC in keep-alive task for lease_id={}: {:?}", id, panic_info);
+            eprintln!("{}{}[CREATE_LEASE] PANIC{} in keep-alive task for lease_id={}: {:?}", RED, BOLD, RESET, id, panic_info);
         }));
         
         // Feature flag to enable/disable retry logic
@@ -38,19 +49,19 @@ pub async fn create_lease(
             const MAX_RETRIES: u32 = 5;
             const RETRY_DELAY: Duration = Duration::from_secs(1);
             
-            eprintln!("[CREATE_LEASE] Using retry logic for lease_id={}", id);
+            eprintln!("{}{}[CREATE_LEASE]{} Using retry logic for lease_id={}", YELLOW, BOLD, RESET, id);
             
             loop {
                 match keep_alive(lease_client.clone(), id, ttl, child.clone()).await {
                     Ok(_) => {
-                        eprintln!("[CREATE_LEASE] Keep-alive task exited successfully for lease_id={}", id);
+                        eprintln!("{}{}[CREATE_LEASE]{} Keep-alive task exited successfully for lease_id={}", GREEN, BOLD, RESET, id);
                         tracing::trace!("keep alive task exited successfully");
                         break;
                     },
                     Err(e) => {
                         retry_count += 1;
-                        eprintln!("[CREATE_LEASE] Keep-alive task failed for lease_id={} (attempt {}/{}): {}", 
-                                 id, retry_count, MAX_RETRIES, e);
+                        eprintln!("{}{}[CREATE_LEASE]{} Keep-alive task failed for lease_id={} (attempt {}/{}): {}", 
+                                 RED, BOLD, RESET, id, retry_count, MAX_RETRIES, e);
                         tracing::error!(
                             error = %e,
                             "Unable to maintain lease. Check etcd server status (attempt {}/{})",
@@ -59,7 +70,7 @@ pub async fn create_lease(
             
                         
                         if retry_count >= MAX_RETRIES {
-                            eprintln!("[CREATE_LEASE] Max retries exceeded for lease_id={}, giving up", id);
+                            eprintln!("{}{}[CREATE_LEASE]{} Max retries exceeded for lease_id={}, giving up", RED, BOLD, RESET, id);
                             tracing::error!(
                                 error = %e,
                                 "Unable to maintain lease after {} retries. Check etcd server status",
@@ -69,7 +80,7 @@ pub async fn create_lease(
                             break;
                         }
                         
-                        eprintln!("[CREATE_LEASE] Retrying keep-alive for lease_id={} in {:?}", id, RETRY_DELAY);
+                        eprintln!("{}{}[CREATE_LEASE]{} Retrying keep-alive for lease_id={} in {:?}", YELLOW, BOLD, RESET, id, RETRY_DELAY);
                         tokio::time::sleep(RETRY_DELAY).await;
                     }
                 }
@@ -125,21 +136,21 @@ pub async fn keep_alive(
     ttl: u64,
     token: CancellationToken,
 ) -> Result<()> {
-    eprintln!("[KEEP_ALIVE] Starting keep-alive for lease_id={}, initial_ttl={}", lease_id, ttl);
+    eprintln!("{}{}[KEEP_ALIVE]{} Starting keep-alive for lease_id={}, initial_ttl={}", MAGENTA, BOLD, RESET, lease_id, ttl);
     
     let mut ttl = ttl;
     let mut deadline = create_deadline(ttl)?;
-    eprintln!("[KEEP_ALIVE] Initial deadline: {:?}", deadline);
+    eprintln!("{}{}[KEEP_ALIVE]{} Initial deadline: {:?}", CYAN, BOLD, RESET, deadline);
 
     let mut client = client;
-    eprintln!("[KEEP_ALIVE] Attempting to create keep-alive stream for lease_id={}", lease_id);
+    eprintln!("{}{}[KEEP_ALIVE]{} Attempting to create keep-alive stream for lease_id={}", BLUE, BOLD, RESET, lease_id);
     let (mut heartbeat_sender, mut heartbeat_receiver) = match client.keep_alive(lease_id as i64).await {
         Ok(stream) => {
-            eprintln!("[KEEP_ALIVE] Keep-alive stream established successfully for lease_id={}", lease_id);
+            eprintln!("{}{}[KEEP_ALIVE]{} Keep-alive stream established successfully for lease_id={}", GREEN, BOLD, RESET, lease_id);
             stream
         },
         Err(e) => {
-            eprintln!("[KEEP_ALIVE] FAILED to create keep-alive stream for lease_id={}: {}", lease_id, e);
+            eprintln!("{}{}[KEEP_ALIVE] FAILED{} to create keep-alive stream for lease_id={}: {}", RED, BOLD, RESET, lease_id, e);
             return Err(e.into());
         }
     };
