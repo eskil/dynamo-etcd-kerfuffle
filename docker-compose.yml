@@ -62,6 +62,8 @@ services:
       - ./rust-client:/app   # Mount source code
       - cargo-target:/app/target  # Persist compiled binaries for faster rebuilds
     working_dir: /app
+    networks:
+      - etcdnet
     depends_on:
       - etcd1
       - etcd2
