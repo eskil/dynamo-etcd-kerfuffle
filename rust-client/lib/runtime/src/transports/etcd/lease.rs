@@ -15,6 +15,7 @@ const MAGENTA: &str = "\x1b[35m";
 const CYAN: &str = "\x1b[36m";
 const WHITE: &str = "\x1b[37m";
 
+
 /// Create a [`Lease`] with a given time-to-live (TTL) attached to the [`CancellationToken`].
 pub async fn create_lease(
     mut lease_client: LeaseClient,
@@ -54,9 +55,10 @@ pub async fn create_lease(
             loop {
                 match keep_alive(lease_client.clone(), id, ttl, child.clone()).await {
                     Ok(_) => {
-                        eprintln!("{}{}[CREATE_LEASE]{} Keep-alive task exited successfully for lease_id={}", GREEN, BOLD, RESET, id);
-                        tracing::trace!("keep alive task exited successfully");
-                        break;
+                        eprintln!("{}{}[CREATE_LEASE]{} Keep-alive task exited successfully for lease_id={}, retry_count={}", GREEN, BOLD, RESET, id, retry_count);
+                        tracing::trace!("keep alive task exited successfully");                        
+                        retry_count = 0;
+                        continue;
                     },
                     Err(e) => {
                         retry_count += 1;
@@ -70,7 +72,7 @@ pub async fn create_lease(
             
                         
                         if retry_count >= MAX_RETRIES {
-                            eprintln!("{}{}[CREATE_LEASE]{} Max retries exceeded for lease_id={}, giving up", RED, BOLD, RESET, id);
+                            eprintln!("{}{}[CREATE_LEASE]{} Max retries {} exceeded for lease_id={}, giving up", RED, BOLD, RESET, MAX_RETRIES, id);
                             tracing::error!(
                                 error = %e,
                                 "Unable to maintain lease after {} retries. Check etcd server status",

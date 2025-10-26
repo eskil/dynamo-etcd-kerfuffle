@@ -39,7 +39,7 @@ fn main() -> anyhow::Result<()> {
             sleep(Duration::from_secs(5)).await;
             let primary_valid = primary_lease.is_valid().await
                 .map_err(|e| anyhow::anyhow!("Failed to check primary lease validity: {}", e))?;
-            println!("Primary lease still valid: {}\n\n\n", primary_valid);
+            println!("Primary lease still valid: {}\n---\n", primary_valid);
             
             // If lease becomes invalid, it means there was likely a leader re-election
             if !primary_valid {

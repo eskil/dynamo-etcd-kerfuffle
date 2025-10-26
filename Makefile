@@ -39,14 +39,14 @@ partition:
 
 # Build the Rust client inside Docker
 rust-build:
-	docker-compose run --rm -e ETCD_ENDPOINTS=$(ETCD_ENDPOINTS) rust-client cargo build
+	docker-compose run --rm --env ETCD_ENDPOINTS=$(ETCD_ENDPOINTS) rust-client cargo build
 
 rust-rebuild:
 	docker-compose build --no-cache rust-client
 
 # Run the Rust client inside Docker
 rust-run:
-	docker-compose run --rm -e ETCD_ENDPOINTS=$(ETCD_ENDPOINTS) rust-client cargo run
+	docker-compose run --rm --env ETCD_ENDPOINTS=$(ETCD_ENDPOINTS) rust-client cargo run
 
 # Rebuild and run in one command
 rust-restart: rust-build rust-run
