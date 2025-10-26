@@ -46,7 +46,7 @@ rust-rebuild:
 
 # Run the Rust client inside Docker
 rust-run:
-	docker-compose run --rm --env ETCD_ENDPOINTS=$(ETCD_ENDPOINTS) rust-client cargo run
+	docker-compose run --rm --interactive --env ETCD_ENDPOINTS=$(ETCD_ENDPOINTS) rust-client cargo run
 
 # Rebuild and run in one command
 rust-restart: rust-build rust-run
