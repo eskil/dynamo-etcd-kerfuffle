@@ -1,18 +1,32 @@
+[package]
+name = "rust-client"
+version = "0.1.0"
+edition = "2021"
+authors = ["various artists"]
+license = "Apache-2.0"
+homepage = "https://github.com/ai-dynamo/dynamo"
+repository = "https://github.com/ai-dynamo/dynamo.git"
+keywords = ["llm", "genai", "inference", "nvidia", "distributed"]
+
+[[bin]]
+name = "rust-client"
+path = "src/main.rs"
+
+[dependencies]
+etcd-client = { version = "0.16", features = ["tls"] }
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
+
 [workspace]
 members = [
-    "lib/runtime",
-]
-
-default-members = [
     "lib/runtime",
 ]
 
 resolver = "3"
 
 [workspace.package]
-name = "rust-client"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 authors = ["various artists"]
 license = "Apache-2.0"
 homepage = "https://github.com/ai-dynamo/dynamo"

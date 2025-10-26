@@ -1,0 +1,9 @@
+#Folders
+.DS_Store
+
+# Emacs
+\#*\#
+*~
+*~
+.#.*#
+#.*#
