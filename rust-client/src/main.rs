@@ -51,6 +51,10 @@ fn main() -> anyhow::Result<()> {
         // Get the primary lease
         let primary_lease = client.primary_lease();
         debug_println!(WHITE, "[MAIN]", RESET, "Primary lease ID: {}", primary_lease.id());
+        // Create a secondary lease with a 15 second TTL
+        let secondary_lease = client.create_lease(10).await
+            .map_err(|e| anyhow::anyhow!("Failed to create secondary lease: {}", e))?;
+        debug_println!(WHITE, "[MAIN]", RESET, "Secondary lease ID: {}", secondary_lease.id());
         
         // Keep the primary lease alive by running the runtime
         debug_println!(WHITE, "[MAIN]", RESET, "Monitoring primary lease. Press Ctrl+C to stop...");
@@ -58,16 +62,23 @@ fn main() -> anyhow::Result<()> {
         
         loop { 
             sleep(Duration::from_secs(5)).await;
-            let primary_valid = primary_lease.is_valid().await
+            let primary_valid: bool = primary_lease.is_valid().await
                 .map_err(|e| anyhow::anyhow!("Failed to check primary lease validity: {}", e))?;
+            let secondary_valid: bool = secondary_lease.is_valid().await
+                .map_err(|e| anyhow::anyhow!("Failed to check secondary lease validity: {}", e))?;
             let elapsed = start_time.elapsed();
             let elapsed_str = format_elapsed(elapsed);
-            if primary_valid {
-                debug_println!(WHITE, "[MAIN]", RESET, "Primary lease still valid: {} (elapsed: {})", primary_valid, elapsed_str);
+            if primary_valid && secondary_valid {
+                debug_println!(WHITE, "[MAIN]", RESET, "Primary lease valid: {} Secondary lease valid: {} (elapsed: {})", primary_valid, secondary_valid, elapsed_str);
                 debug_println!(WHITE, "", RESET, "---");
                 debug_println!(WHITE, "", RESET, "");
             } else {        
-                debug_println!(WHITE, "[MAIN]", RED, "⚠️  PRIMARY LEASE BECAME INVALID! (elapsed: {})", elapsed_str);
+                if !primary_valid {
+                    debug_println!(WHITE, "[MAIN]", RED, "⚠️  PRIMARY LEASE BECAME INVALID! (elapsed: {})", elapsed_str);
+                }
+                if !secondary_valid {
+                    debug_println!(WHITE, "[MAIN]", RED, "⚠️  SECONDARY LEASE BECAME INVALID! (elapsed: {})", elapsed_str);
+                }
                 debug_println!(WHITE, "[MAIN]", RED, "Exiting due to lease invalidation...");
                 break;
             }

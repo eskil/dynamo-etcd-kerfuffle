@@ -37,6 +37,15 @@ partition:
 	sleep 5; \
 	docker unpause $$leader;
 
+show-leases:
+	@echo "Leases:"
+	@docker exec etcd1 etcdctl --endpoints=$(ETCD_ENDPOINTS) lease list
+	@echo ""
+	@echo "Lease TTLs:"
+	@docker exec etcd1 etcdctl --endpoints=$(ETCD_ENDPOINTS) lease list | \
+		tail -n +2 | \
+		xargs -I {} docker exec etcd1 etcdctl --endpoints=$(ETCD_ENDPOINTS) lease timetolive {} 
+
 # Build the Rust client inside Docker
 rust-build:
 	docker-compose run --rm --env ETCD_ENDPOINTS=$(ETCD_ENDPOINTS) rust-client cargo build

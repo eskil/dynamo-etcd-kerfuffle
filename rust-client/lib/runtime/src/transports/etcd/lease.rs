@@ -20,6 +20,11 @@ pub async fn create_lease(
     let child = token.child_token();
     let clone = token.clone();
 
+    let mut retry_count = 0;
+    const MAX_RETRIES: u32 = 20;
+    const RETRY_DELAY: Duration = Duration::from_millis(500);
+    let mut last_retry_time = std::time::Instant::now();
+
     debug_println!(BLUE, "[CREATE_LEASE]", RESET, "Spawning keep-alive task lease_id={}", id);
     tokio::spawn(async move {
         debug_println!(BLUE, "[CREATE_LEASE]", RESET, "Keep-alive task started lease_id={}", id);
@@ -28,22 +33,46 @@ pub async fn create_lease(
         std::panic::set_hook(Box::new(move |panic_info| {
             debug_println!(RED, "[CREATE_LEASE]", RESET, "PANIC in keep-alive task lease_id={}: {:?}", id, panic_info);
         }));
-        
-        match keep_alive(lease_client, id, ttl, child).await {
-            Ok(_) => {
-                debug_println!(GREEN, "[CREATE_LEASE]", RESET, "Keep-alive task EXITED successfully lease_id={}", id);
-                tracing::trace!("keep alive task exited successfully");
-            },
-            Err(e) => {
-                debug_println!(RED, "[CREATE_LEASE]", RESET, "Keep-alive task FAILED lease_id={}: {}", id, e);
-                tracing::error!(
-                    error = %e,
-                    "Unable to maintain lease. Check etcd server status"
-                );
-                token.cancel();
+
+        loop {      
+            match keep_alive(lease_client.clone(), id, ttl, child.clone()).await {
+                Ok(_) => {
+                    debug_println!(GREEN, "[CREATE_LEASE]", RESET, "Keep-alive task EXITED successfully lease_id={}", id);
+                    tracing::trace!("keep alive task exited successfully");
+                },
+                Err(e) => {
+                    debug_println!(RED, "[CREATE_LEASE]", RESET, "❌ Keep-alive task FAILED lease_id={}: {}", id, e);
+                    tracing::error!(
+                        error = %e,
+                        "Unable to maintain lease. Check etcd server status"
+                    );
+
+                    if retry_count > 0 {
+                        let time_since_last_retry = std::time::Instant::now().duration_since(last_retry_time);
+                        if time_since_last_retry.as_secs() >= ttl {
+                            debug_println!(YELLOW, "[KEEP_ALIVE]", RESET, "Resetting retry_count after TTL ({}) passed since last retry for lease_id={}", ttl, id);
+                            retry_count = 0;
+                        }
+                    }
+                    retry_count += 1;
+                    if retry_count >= MAX_RETRIES {
+                        debug_println!(RED, "[CREATE_LEASE]", RESET, "Max retries {} exceeded lease_id={}, giving up", MAX_RETRIES, id);
+                        tracing::error!(
+                            error = %e,
+                            "Unable to maintain lease after {} retries. Check etcd server status",
+                            MAX_RETRIES
+                        );
+                        token.cancel();
+                        break
+                    }
+                    last_retry_time = std::time::Instant::now();
+                    debug_println!(YELLOW, "[KEEP_ALIVE]", RESET, "Retrying {}/{} for lease_id={} in {:?}", retry_count, MAX_RETRIES, id, RETRY_DELAY);
+                    tokio::time::sleep(RETRY_DELAY).await;
+                    continue;
+                }
             }
         }
-        
+
         debug_println!(BLUE, "[CREATE_LEASE]", RESET, "Keep-alive task completely finished lease_id={}", id);
     });
 
@@ -80,13 +109,7 @@ pub async fn keep_alive(
     let mut client = client;
     let (mut heartbeat_sender, mut heartbeat_receiver) = client.keep_alive(lease_id as i64).await?;
 
-
-    debug_println!(BLUE, "[KEEP_ALIVE]", RESET, "Starting keep-alive loop lease_id={}, ttl={}, deadline={:?}", 
-        lease_id, ttl, deadline);
-
     loop {
-        debug_println!(GREEN, "[KEEP_ALIVE]", RESET, "Loop iteration lease_id={}, ttl={}, deadline={:?}", 
-                 lease_id, ttl, deadline);
         // if the deadline is exceeded, then we have failed to issue a heartbeat in time
         // we may be permanently disconnected from the etcd server, so we are now officially done
         if deadline < std::time::Instant::now() {
@@ -96,6 +119,10 @@ pub async fn keep_alive(
             ));
         }
 
+        let time_until_deadline = deadline.duration_since(std::time::Instant::now());
+        debug_println!(GREEN, "[KEEP_ALIVE]", RESET, "Loop iteration lease_id={}, ttl={}, time_until_deadline={:.1}s", 
+                 lease_id, ttl, time_until_deadline.as_secs_f64());
+        
         tokio::select! {
             biased;
 
@@ -116,11 +143,11 @@ pub async fn keep_alive(
                     },
                     Ok(None) => {
                         // No response received - this is expected in some cases
-                        debug_println!(YELLOW, "[KEEP_ALIVE]", RESET, "⁇ No response received for lease_id={}", lease_id);
+                        debug_println!(YELLOW, "[KEEP_ALIVE]", RESET, "🤔 No response received for lease_id={}", lease_id);
                     },
                     Err(e) => {
                         // Error getting the message
-                        debug_println!(RED, "[KEEP_ALIVE]", RESET, "❌ Error receiving heartbeat message for lease_id={}: {}", lease_id, e);
+                        debug_println!(RED, "[KEEP_ALIVE]", RESET, "💔 Error receiving heartbeat message for lease_id={}: {}", lease_id, e);
                         return Err(e.into());
                     }
                 }
@@ -135,7 +162,7 @@ pub async fn keep_alive(
 
             _ = tokio::time::sleep(tokio::time::Duration::from_secs(ttl / 2)) => {
                 tracing::trace!(lease_id, "sending keep alive");
-                debug_println!(GREEN, "[KEEP_ALIVE]", RESET, "Slept for {:?} seconds lease_id={}, sending heartbeat ❤️", ttl / 2, lease_id);
+                debug_println!(GREEN, "[KEEP_ALIVE]", RESET, "Slept for {:?} seconds lease_id={}, sending heartbeat 💕", ttl / 2, lease_id);
 
                 // if we get a error issuing the heartbeat, set the ttl to 0
                 // this will allow us to poll the response stream once and the cancellation token once, then
