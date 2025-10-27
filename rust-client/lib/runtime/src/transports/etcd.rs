@@ -32,6 +32,7 @@ macro_rules! debug_println {
             "CYAN" => "\x1b[36m\x1b[1m",
             "WHITE" => "\x1b[37m\x1b[1m",
             "FAINT" => "\x1b[2m",
+            "FAINT_GREEN" => "\x1b[2m\x1b[32m\x1b[1m",
             _ => "\x1b[0m",
         };
         let fmt_color = match stringify!($fmt_color) {

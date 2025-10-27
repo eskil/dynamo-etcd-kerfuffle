@@ -1,13 +1,31 @@
 use dynamo_runtime::transports::etcd::{Client, ClientOptions};
 use dynamo_runtime::Runtime;
+use std::time::Instant;
 use tokio::time::{sleep, Duration};
 
 // Import the debug macro
 use dynamo_runtime::debug_println;
 
+/// Format elapsed time in a human-friendly way
+fn format_elapsed(elapsed: std::time::Duration) -> String {
+    let total_secs = elapsed.as_secs();
+    let hours = total_secs / 3600;
+    let mins = (total_secs % 3600) / 60;
+    let secs = total_secs % 60;
+    
+    match (hours, mins, secs) {
+        (0, 0, s) => format!("{}s", s),
+        (0, m, s) => format!("{}min {}s", m, s),
+        (h, m, s) => format!("{}hr {}min {}s", h, m, s),
+    }
+}
+
 fn main() -> anyhow::Result<()> {
     // Initialize Dynamo runtime
     let runtime = Runtime::from_settings()?;
+    
+    // Record start time
+    let start_time = Instant::now();
     
     // Run the async code in the Dynamo runtime's primary executor
     runtime.primary().block_on(async {
@@ -36,18 +54,20 @@ fn main() -> anyhow::Result<()> {
         
         // Keep the primary lease alive by running the runtime
         debug_println!(WHITE, "[MAIN]", RESET, "Monitoring primary lease. Press Ctrl+C to stop...");
-        debug_println!(WHITE, "[MAIN]", RESET, "Try running 'make restart-leader' in another terminal to test leader re-election!");
+        debug_println!(WHITE, "[MAIN]", WHITE, "ℹ️ Try running 'make restart-leader' in another terminal to test leader re-election");
         
         loop { 
             sleep(Duration::from_secs(5)).await;
             let primary_valid = primary_lease.is_valid().await
                 .map_err(|e| anyhow::anyhow!("Failed to check primary lease validity: {}", e))?;
+            let elapsed = start_time.elapsed();
+            let elapsed_str = format_elapsed(elapsed);
             if primary_valid {
-                debug_println!(WHITE, "[MAIN]", RESET, "Primary lease still valid: {}", primary_valid);
+                debug_println!(WHITE, "[MAIN]", RESET, "Primary lease still valid: {} (elapsed: {})", primary_valid, elapsed_str);
                 debug_println!(WHITE, "", RESET, "---");
                 debug_println!(WHITE, "", RESET, "");
             } else {        
-                debug_println!(WHITE, "[MAIN]", RED, "⚠️  PRIMARY LEASE BECAME INVALID!");
+                debug_println!(WHITE, "[MAIN]", RED, "⚠️  PRIMARY LEASE BECAME INVALID! (elapsed: {})", elapsed_str);
                 debug_println!(WHITE, "[MAIN]", RED, "Exiting due to lease invalidation...");
                 break;
             }
