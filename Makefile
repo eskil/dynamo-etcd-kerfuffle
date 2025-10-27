@@ -16,10 +16,10 @@ endef
 compose:
 	docker compose up -d
 
-leader:
+etcd-leader:
 	@$(call get-etcd-leader-cmd)
 
-check:
+etcd-status:
 	@$(call etcd-status-table-cmd)
 
 restart-leader:
@@ -29,7 +29,7 @@ restart-leader:
 	docker restart $$leader
 	@$(call etcd-status-table-cmd)
 
-partition:
+etcd-partition:
 	@leader=$$( $(call get-etcd-leader-cmd) ); \
 	echo "Leader is $$leader"; \
 	docker restart $$leader; \
@@ -37,14 +37,23 @@ partition:
 	sleep 5; \
 	docker unpause $$leader;
 
-show-leases:
+etcd-leases:
 	@echo "Leases:"
-	@docker exec etcd1 etcdctl --endpoints=$(ETCD_ENDPOINTS) lease list
+	@docker exec etcd1 etcdctl --endpoints=$(ETCD_ENDPOINTS) lease list | tail -n +2 | sort
 	@echo ""
 	@echo "Lease TTLs:"
 	@docker exec etcd1 etcdctl --endpoints=$(ETCD_ENDPOINTS) lease list | \
+		tail -n +2 | sort | \
+		xargs -I {} docker exec etcd1 etcdctl --endpoints=$(ETCD_ENDPOINTS) lease timetolive {}
+
+etcd-watch-leases:
+	watch --interval 1 --differences "make etcd-leases"
+
+etcd-del-leases:
+	@echo "Deleting all leases..."
+	@docker exec etcd1 etcdctl --endpoints=$(ETCD_ENDPOINTS) lease list | \
 		tail -n +2 | \
-		xargs -I {} docker exec etcd1 etcdctl --endpoints=$(ETCD_ENDPOINTS) lease timetolive {} 
+		xargs -I {} docker exec etcd1 etcdctl --endpoints=$(ETCD_ENDPOINTS) lease revoke {} 
 
 # Build the Rust client inside Docker
 rust-build:
