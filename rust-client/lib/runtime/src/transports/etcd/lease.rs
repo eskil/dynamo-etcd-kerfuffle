@@ -80,16 +80,13 @@ pub async fn keep_alive(
     let mut client = client;
     let (mut heartbeat_sender, mut heartbeat_receiver) = client.keep_alive(lease_id as i64).await?;
 
-    let mut retry_count = 1;
-    const MAX_RETRIES: u32 = 20;
-    const RETRY_DELAY: Duration = Duration::from_millis(500);
 
-    debug_println!(BLUE, "[KEEP_ALIVE]", RESET, "Loop iteration lease_id={}, ttl={}, deadline={:?} retry_count={} MAX_RETRIES={}", 
-        lease_id, ttl, deadline, retry_count, MAX_RETRIES);
+    debug_println!(BLUE, "[KEEP_ALIVE]", RESET, "Starting keep-alive loop lease_id={}, ttl={}, deadline={:?}", 
+        lease_id, ttl, deadline);
 
     loop {
-        debug_println!(GREEN, "[KEEP_ALIVE]", GREEN, "Loop iteration lease_id={}, ttl={}, deadline={:?} retry_count={}", 
-                 lease_id, ttl, deadline, retry_count);
+        debug_println!(GREEN, "[KEEP_ALIVE]", RESET, "Loop iteration lease_id={}, ttl={}, deadline={:?}", 
+                 lease_id, ttl, deadline);
         // if the deadline is exceeded, then we have failed to issue a heartbeat in time
         // we may be permanently disconnected from the etcd server, so we are now officially done
         if deadline < std::time::Instant::now() {
@@ -103,28 +100,34 @@ pub async fn keep_alive(
             biased;
 
             status = heartbeat_receiver.message() => {
-                debug_println!(GREEN, "[KEEP_ALIVE]", RESET, "❤️ Heartbeat response received lease_id={}", lease_id);
-                if let Some(resp) = status? {
-                    tracing::trace!(lease_id, "keep alive response received: {:?}", resp);
+                match status {
+                    Ok(Some(resp)) => {
+                        // Good response - process the heartbeat
+                        debug_println!(GREEN, "[KEEP_ALIVE]", RESET, "❤️ Heartbeat response received lease_id={}", lease_id);
+                        tracing::trace!(lease_id, "keep alive response received: {:?}", resp);
 
-                    // update ttl and deadline
-                    ttl = resp.ttl() as u64;
-                    deadline = create_deadline(ttl)?;
+                        // update ttl and deadline
+                        ttl = resp.ttl() as u64;
+                        deadline = create_deadline(ttl)?;
 
-                    if retry_count > 0 {
-                        debug_println!(GREEN, "[KEEP_ALIVE]", RESET, "Successfully recovered after {} retries lease_id={}", retry_count, lease_id);
-                        retry_count = 0;
+                        if resp.ttl() == 0 {
+                            return Err(error!("Unable to maintain lease - expired or revoked. Check etcd server status"));
+                        }
+                    },
+                    Ok(None) => {
+                        // No response received - this is expected in some cases
+                        debug_println!(YELLOW, "[KEEP_ALIVE]", RESET, "⁇ No response received for lease_id={}", lease_id);
+                    },
+                    Err(e) => {
+                        // Error getting the message
+                        debug_println!(RED, "[KEEP_ALIVE]", RESET, "❌ Error receiving heartbeat message for lease_id={}: {}", lease_id, e);
+                        return Err(e.into());
                     }
-
-                    if resp.ttl() == 0 {
-                        return Err(error!("Unable to maintain lease - expired or revoked. Check etcd server status"));
-                    }
-
                 }
             }
 
             _ = token.cancelled() => {
-                debug_println!(RED, "[KEEP_ALIVE]", RESET, "❌ Cancellation token triggered lease_id={}", lease_id);
+                debug_println!(RED, "[KEEP_ALIVE]", RESET, "Cancellation token triggered lease_id={}", lease_id);
                 tracing::trace!(lease_id, "cancellation token triggered; revoking lease");
                 let _ = client.revoke(lease_id as i64).await?;
                 return Ok(());
@@ -132,7 +135,7 @@ pub async fn keep_alive(
 
             _ = tokio::time::sleep(tokio::time::Duration::from_secs(ttl / 2)) => {
                 tracing::trace!(lease_id, "sending keep alive");
-                debug_println!(GREEN, "[KEEP_ALIVE]", FAINT_GREEN, "📡 Slept for {:?} seconds lease_id={}, sending heartbeat", ttl / 2, lease_id);
+                debug_println!(GREEN, "[KEEP_ALIVE]", RESET, "Slept for {:?} seconds lease_id={}, sending heartbeat ❤️", ttl / 2, lease_id);
 
                 // if we get a error issuing the heartbeat, set the ttl to 0
                 // this will allow us to poll the response stream once and the cancellation token once, then
